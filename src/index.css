@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/work-sans";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Palette carried over from The Weekly Table artifact (sage green + warm amber),
+ * mapped onto shadcn's token names so every shadcn component picks it up.
+ */
+:root {
+  --radius: 0.75rem;
+
+  --background: #f5f6f0;
+  --foreground: #212b21;
+  --card: #ffffff;
+  --card-foreground: #212b21;
+  --popover: #ffffff;
+  --popover-foreground: #212b21;
+  --primary: #2f4a3e;
+  --primary-foreground: #ffffff;
+  --secondary: #ecefe3;
+  --secondary-foreground: #212b21;
+  --muted: #ecefe3;
+  --muted-foreground: #5b6b5a;
+  --accent: #f3e4c8;
+  --accent-foreground: #212b21;
+  --warm: #b07418;
+  --destructive: #a3432f;
+  --border: #d8ddd0;
+  --input: #e4e8db;
+  --ring: #c98a2c;
+}
+
+.dark {
+  --background: #1a1f19;
+  --foreground: #e9ebe2;
+  --card: #222820;
+  --card-foreground: #e9ebe2;
+  --popover: #222820;
+  --popover-foreground: #e9ebe2;
+  --primary: #93bb9f;
+  --primary-foreground: #16201a;
+  --secondary: #2b3226;
+  --secondary-foreground: #e9ebe2;
+  --muted: #2b3226;
+  --muted-foreground: #a7b19e;
+  --accent: #3a2e19;
+  --accent-foreground: #e9ebe2;
+  --warm: #e3b15c;
+  --destructive: #e08b74;
+  --border: #3a4233;
+  --input: #333a2d;
+  --ring: #e3b15c;
+}
+
+@theme inline {
+  --font-sans: "Work Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces Variable", Georgia, serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-warm: var(--warm);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}

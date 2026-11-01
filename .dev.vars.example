@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local development (never committed).
+# Locally there is no Cloudflare Access in front of the app, so the API
+# treats you as this user. It is ignored on any non-localhost hostname.
+DEV_AUTH_EMAIL=you@example.com

@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "homeapp",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-20",
+  "observability": { "enabled": true },
+
+  // The React app is served as static assets. Anything under /api/* goes to the
+  // Worker first; every other unknown path falls back to index.html (SPA routing).
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "homeapp",
+      // Replace with the id printed by `npx wrangler d1 create homeapp`.
+      // Local dev works without changing it.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Cloudflare Access settings. Both are public identifiers, not secrets.
+  // Left empty, the API refuses every request outside local dev (fails closed).
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  }
+  // ALLOWED_EMAILS is set as a secret: `npx wrangler secret put ALLOWED_EMAILS`
+}
