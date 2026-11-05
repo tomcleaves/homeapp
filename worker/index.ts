@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { MeResponse } from "@shared/types";
 import { requireUser, type AppEnv } from "./auth";
 import { mealRoutes } from "./routes/meals";
+import { recipeRoutes } from "./routes/recipes";
 
 // Static files (the React app) are served by Workers Assets before this code
 // runs. Only /api/* reaches the Worker (see run_worker_first in wrangler.jsonc).
@@ -12,6 +13,7 @@ app.use("*", requireUser);
 
 app.get("/me", (c) => c.json<MeResponse>({ email: c.get("userEmail") }));
 app.route("/", mealRoutes);
+app.route("/", recipeRoutes);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 

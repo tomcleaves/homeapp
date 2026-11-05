@@ -8,6 +8,20 @@
       "when": 1793559308635,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793909854351,
+      "tag": "0001_recipes",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793909867131,
+      "tag": "0002_drop_meal_recipe_url",
+      "breakpoints": true
     }
   ]
 }

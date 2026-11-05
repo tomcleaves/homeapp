@@ -109,9 +109,9 @@ export function MealSlot({ date, slot, dayLabel, nextDayLabel, meal }: Props) {
       </div>
 
       <RecipeLink
-        url={meal?.recipeUrl ?? null}
+        recipe={meal?.recipe ?? null}
         label={label}
-        onChange={(recipeUrl) => update.mutateAsync({ date, slot, update: { recipeUrl } })}
+        onChange={(change) => update.mutateAsync({ date, slot, update: change })}
       />
 
       {slot === "dinner" && (

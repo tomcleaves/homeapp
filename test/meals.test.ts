@@ -22,7 +22,7 @@ describe("meals API", () => {
     expect(w.meals.map((m) => m.title)).toContain("Chicken traybake");
   });
 
-  it("keeps the link when only the title changes, and vice versa", async () => {
+  it("keeps the recipe when only the title changes, and vice versa", async () => {
     await put("/api/meals/2026-11-10/dinner", {
       title: "Ragu",
       recipeUrl: "https://www.bbcgoodfood.com/recipes/ragu",
@@ -30,10 +30,18 @@ describe("meals API", () => {
     const res = await put("/api/meals/2026-11-10/dinner", { title: "Slow ragu" });
     const { meal } = (await res.json()) as { meal: Meal };
     expect(meal.title).toBe("Slow ragu");
-    expect(meal.recipeUrl).toBe("https://www.bbcgoodfood.com/recipes/ragu");
+    expect(meal.recipe?.url).toBe("https://www.bbcgoodfood.com/recipes/ragu");
 
     const res2 = await put("/api/meals/2026-11-10/dinner", { recipeUrl: null });
-    expect(((await res2.json()) as { meal: Meal }).meal.title).toBe("Slow ragu");
+    const after = ((await res2.json()) as { meal: Meal }).meal;
+    expect(after.title).toBe("Slow ragu");
+    expect(after.recipe).toBeNull();
+  });
+
+  it("keeps a slot that has a recipe but no title", async () => {
+    const res = await put("/api/meals/2026-11-11/lunch", { recipeUrl: "https://example.com/soup" });
+    const { meal } = (await res.json()) as { meal: Meal };
+    expect(meal).toMatchObject({ title: "", recipe: { url: "https://example.com/soup" } });
   });
 
   it("deletes a slot once it has no title and no link", async () => {

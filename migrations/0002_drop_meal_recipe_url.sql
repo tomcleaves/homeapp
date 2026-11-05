@@ -1,0 +1,1 @@
+ALTER TABLE `meals` DROP COLUMN `recipe_url`;

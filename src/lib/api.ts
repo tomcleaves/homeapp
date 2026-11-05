@@ -1,4 +1,13 @@
-import type { Meal, MealUpdate, MeResponse, WeekResponse } from "@shared/types";
+import type {
+  Meal,
+  MealUpdate,
+  MeResponse,
+  Recipe,
+  RecipeInput,
+  RecipePatch,
+  RecipesResponse,
+  WeekResponse,
+} from "@shared/types";
 import type { Slot } from "@shared/week";
 
 export class ApiError extends Error {
@@ -50,4 +59,14 @@ export const api = {
 
   sendLeftovers: (date: string) =>
     request<{ meal: Meal | null }>(`/api/meals/${date}/dinner/leftovers`, { method: "POST" }),
+
+  recipes: () => request<RecipesResponse>("/api/recipes"),
+
+  createRecipe: (input: RecipeInput) =>
+    request<{ recipe: Recipe }>("/api/recipes", { method: "POST", body: JSON.stringify(input) }),
+
+  updateRecipe: (id: number, patch: RecipePatch) =>
+    request<{ recipe: Recipe }>(`/api/recipes/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  deleteRecipe: (id: number) => request<{ ok: true }>(`/api/recipes/${id}`, { method: "DELETE" }),
 };

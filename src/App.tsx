@@ -1,35 +1,24 @@
-import { LogOut } from "lucide-react";
-import { DAYS, localToday, weekDates } from "@shared/week";
+import { BookOpen, CalendarDays, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DayCard } from "@/components/day-card";
 import { SaveStatus } from "@/components/save-status";
-import { WeekNav } from "@/components/week-nav";
-import { SignedOutError } from "@/lib/api";
-import { useMe, useWeek } from "@/lib/queries";
-import { useWeekParam } from "@/lib/use-week-param";
+import { useMe } from "@/lib/queries";
+import { linkProps, usePathname } from "@/lib/router";
+import { cn } from "@/lib/utils";
+import { RecipesPage } from "@/pages/recipes-page";
+import { WeekPage } from "@/pages/week-page";
 
 // Cloudflare Access's own sign-out endpoint, available on any Access-protected host.
 const SIGN_OUT_URL = "/cdn-cgi/access/logout";
 
-function Notice({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card className="gap-3 border-warm/40 bg-accent">
-      <CardHeader>
-        <CardTitle className="font-serif text-lg">{title}</CardTitle>
-        <CardDescription className="text-accent-foreground/80">{children}</CardDescription>
-      </CardHeader>
-    </Card>
-  );
-}
+const PAGES = [
+  { path: "/", label: "Week plan", icon: CalendarDays },
+  { path: "/recipes", label: "Recipe library", icon: BookOpen },
+] as const;
 
 export default function App() {
-  const [weekStart, goToWeek] = useWeekParam();
   const me = useMe();
-  const week = useWeek(weekStart);
-  const today = localToday();
-
-  const signedOut = me.error instanceof SignedOutError || week.error instanceof SignedOutError;
+  const pathname = usePathname();
+  const onRecipes = pathname.replace(/\/+$/, "") === "/recipes";
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-3xl flex-col gap-5 px-4 pt-8 pb-16 sm:px-5">
@@ -57,48 +46,29 @@ export default function App() {
         </div>
       </header>
 
-      <WeekNav weekStart={weekStart} onChange={goToWeek} />
+      <nav aria-label="Pages" className="flex gap-1 rounded-xl border bg-card p-1 shadow-sm">
+        {PAGES.map(({ path, label, icon: Icon }) => {
+          const active = (path === "/recipes") === onRecipes;
+          return (
+            <a
+              key={path}
+              {...linkProps(path)}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+              )}
+            >
+              <Icon className="size-4" />
+              {label}
+            </a>
+          );
+        })}
+      </nav>
 
-      {signedOut ? (
-        <Notice title="You’ve been signed out">
-          Your session ended.{" "}
-          <button className="font-medium underline" onClick={() => window.location.reload()}>
-            Sign in again
-          </button>{" "}
-          to keep planning.
-        </Notice>
-      ) : week.isError ? (
-        <Notice title="Couldn’t load this week">
-          {week.error.message}.{" "}
-          <button className="font-medium underline" onClick={() => void week.refetch()}>
-            Try again
-          </button>
-        </Notice>
-      ) : (
-        <main className="flex flex-col gap-2.5" aria-busy={week.isPending}>
-          {weekDates(weekStart).map((date, i) =>
-            week.data ? (
-              <DayCard
-                key={date}
-                date={date}
-                dayIndex={i}
-                isToday={date === today}
-                meals={week.data.meals}
-              />
-            ) : (
-              <Card key={date} className="h-28 animate-pulse py-0" aria-hidden>
-                <CardContent className="pt-4 font-serif text-muted-foreground/60">
-                  {DAYS[i]!.label}
-                </CardContent>
-              </Card>
-            ),
-          )}
-        </main>
-      )}
-
-      <footer className="mt-4 text-center text-xs text-muted-foreground">
-        One week at a time. Use the arrows for other weeks.
-      </footer>
+      {onRecipes ? <RecipesPage /> : <WeekPage />}
     </div>
   );
 }

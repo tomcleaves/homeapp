@@ -1,61 +1,80 @@
-import { useState } from "react";
-import { Link2, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { BookOpen, Link2, X } from "lucide-react";
+import type { MealRecipe, MealUpdate, Recipe } from "@shared/types";
+import { recipeHost } from "@shared/recipes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useRecipes } from "@/lib/queries";
+import { matchesSearch } from "@/lib/search";
 
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "Recipe";
-  }
-}
+type RecipeChange = Pick<MealUpdate, "recipeUrl" | "recipeId">;
 
 interface Props {
-  url: string | null;
+  recipe: MealRecipe | null;
   label: string;
-  onChange: (url: string | null) => Promise<unknown>;
+  onChange: (change: RecipeChange) => Promise<unknown>;
 }
 
-/** Shows a meal's recipe link, or lets you paste one in. */
-export function RecipeLink({ url, label, onChange }: Props) {
+const looksLikeUrl = (v: string) => /^(https?:\/\/|www\.)|\.[a-z]{2,}(\/|$)/i.test(v.trim());
+
+/** Shows a meal's recipe, or lets you pick one from the library or paste a link. */
+export function RecipeLink({ recipe, label, onChange }: Props) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const library = useRecipes();
 
-  async function commit() {
-    let next = value.trim();
-    if (!next) return setEditing(false);
-    if (!/^[a-z][a-z0-9+.-]*:/i.test(next)) next = `https://${next}`;
+  const suggestions = useMemo(() => {
+    const all = library.data?.recipes ?? [];
+    const q = value.trim();
+    if (!q || looksLikeUrl(q)) return [];
+    return all.filter((r) => matchesSearch(r, q)).slice(0, 5);
+  }, [library.data, value]);
+
+  function close() {
+    setEditing(false);
+    setValue("");
+    setError(null);
+  }
+
+  async function apply(change: RecipeChange) {
     try {
-      await onChange(next);
-      setEditing(false);
-      setValue("");
-      setError(null);
+      await onChange(change);
+      close();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save that link");
+      setError(e instanceof Error ? e.message : "Couldn't save that recipe");
     }
   }
 
-  if (url) {
+  function commitTyped() {
+    const v = value.trim();
+    if (!v) return close();
+    const first = suggestions[0];
+    if (!looksLikeUrl(v) && first) return void apply({ recipeId: first.id });
+    if (!looksLikeUrl(v)) return setError("Paste a link, or pick a recipe from your library");
+    const url = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+    void apply({ recipeUrl: url });
+  }
+
+  if (recipe) {
     return (
       <div className="flex min-h-6 items-center gap-1">
         <a
-          href={url}
+          href={recipe.url}
           target="_blank"
           rel="noopener noreferrer"
-          title={url}
+          title={recipe.url}
           className="inline-flex max-w-full items-center gap-1 truncate rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-primary hover:underline"
         >
           <Link2 className="size-3 shrink-0" />
-          <span className="truncate">{hostOf(url)}</span>
+          <span className="truncate">{recipe.title?.trim() || recipeHost(recipe.url)}</span>
         </a>
         <Button
           variant="ghost"
           size="icon-sm"
           className="size-6 text-muted-foreground"
-          aria-label={`Remove recipe link for ${label}`}
-          onClick={() => onChange(null)}
+          aria-label={`Remove recipe from ${label}`}
+          onClick={() => void onChange({ recipeId: null })}
         >
           <X className="size-3" />
         </Button>
@@ -70,7 +89,7 @@ export function RecipeLink({ url, label, onChange }: Props) {
         onClick={() => setEditing(true)}
         className="inline-flex min-h-6 items-center gap-1 self-start text-xs text-muted-foreground hover:text-primary hover:underline"
       >
-        <Link2 className="size-3" /> Add recipe link
+        <Link2 className="size-3" /> Add recipe
       </button>
     );
   }
@@ -80,39 +99,56 @@ export function RecipeLink({ url, label, onChange }: Props) {
       <div className="flex items-center gap-1.5">
         <Input
           autoFocus
-          type="url"
           inputMode="url"
-          placeholder="Paste a recipe link…"
-          aria-label={`Recipe link for ${label}`}
+          placeholder="Paste a link or search your recipes…"
+          aria-label={`Recipe for ${label}`}
           aria-invalid={error ? true : undefined}
           className="h-8 text-xs md:text-xs"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(null);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              void commit();
+              commitTyped();
             } else if (e.key === "Escape") {
-              setEditing(false);
-              setError(null);
+              close();
             }
           }}
         />
-        <Button size="sm" className="h-8" onClick={() => void commit()}>
+        <Button size="sm" className="h-8" onClick={commitTyped}>
           Add
         </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Cancel"
-          onClick={() => {
-            setEditing(false);
-            setError(null);
-          }}
-        >
+        <Button variant="ghost" size="icon-sm" aria-label="Cancel" onClick={close}>
           <X />
         </Button>
       </div>
+
+      {suggestions.length > 0 && (
+        <ul
+          aria-label="Matching recipes from your library"
+          className="flex flex-col overflow-hidden rounded-md border bg-popover text-xs shadow-sm"
+        >
+          {suggestions.map((r: Recipe) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => void apply({ recipeId: r.id })}
+                className="flex w-full items-start gap-2 px-2.5 py-1.5 text-left hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none"
+              >
+                <BookOpen className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
+                <span className="flex min-w-0 flex-col">
+                  <span className="font-medium text-pretty">{r.displayName}</span>
+                  <span className="truncate text-muted-foreground">{r.host}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );

@@ -13,16 +13,28 @@ export const users = sqliteTable("users", {
 });
 
 /**
- * One row per planned meal. A slot with no row is empty.
- * Recipes become their own table later; for now a meal can carry a link.
+ * The recipe library. One row per distinct recipe link; a recipe stays here
+ * after it's removed from every meal, so the library is a lasting record.
  */
+export const recipes = sqliteTable("recipes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  url: text("url").notNull().unique(),
+  // A name the user gave it. When empty, the UI names it after a meal that used it.
+  title: text("title"),
+  createdBy: text("created_by").references(() => users.email),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
+/** One row per planned meal. A slot with no row is empty. */
 export const meals = sqliteTable(
   "meals",
   {
     date: text("date").notNull(), // YYYY-MM-DD
     slot: text("slot", { enum: ["lunch", "dinner"] }).notNull(),
     title: text("title").notNull().default(""),
-    recipeUrl: text("recipe_url"),
+    recipeId: integer("recipe_id").references(() => recipes.id, { onDelete: "set null" }),
     updatedBy: text("updated_by").references(() => users.email),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
       .notNull()
