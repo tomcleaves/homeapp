@@ -15,3 +15,15 @@ export function call(path: string, init?: RequestInit, extraEnv: Record<string, 
 export function put(path: string, body: unknown, extraEnv?: Record<string, string>) {
   return call(path, { method: "PUT", body: JSON.stringify(body) }, extraEnv);
 }
+
+export function post(path: string, body: unknown, extraEnv?: Record<string, string>) {
+  return call(path, { method: "POST", body: JSON.stringify(body) }, extraEnv);
+}
+
+export function patch(path: string, body: unknown, extraEnv?: Record<string, string>) {
+  return call(path, { method: "PATCH", body: JSON.stringify(body) }, extraEnv);
+}
+
+export function del(path: string, extraEnv?: Record<string, string>) {
+  return call(path, { method: "DELETE" }, extraEnv);
+}

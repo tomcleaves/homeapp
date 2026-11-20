@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PENCE } from "@shared/money";
 import { normaliseRecipeUrl } from "@shared/recipes";
 import { isIsoDate } from "@shared/week";
 
@@ -25,3 +26,14 @@ export const recipeTitle = z
   .nullable();
 
 export const idParam = z.object({ id: z.coerce.number().int().positive() });
+
+export const pence = z.number().int().min(0).max(MAX_PENCE);
+export const severity = z.enum(["low", "med", "high"]);
+export const doer = z.enum(["diy", "trade"]);
+
+/** "  Downstairs   loo " → "Downstairs loo"; blank → null. */
+export const room = z
+  .string()
+  .max(60)
+  .transform((v) => v.trim().replace(/\s+/g, " ") || null)
+  .nullable();

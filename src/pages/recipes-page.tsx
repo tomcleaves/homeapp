@@ -5,6 +5,7 @@ import { normaliseRecipeUrl } from "@shared/recipes";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/native-select";
 import { LoadError, Notice } from "@/components/notice";
 import { RecipeCard } from "@/components/recipe-card";
 import { useCreateRecipe, useRecipes } from "@/lib/queries";
@@ -153,18 +154,13 @@ export function RecipesPage() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <select
-          aria-label="Sort recipes"
-          value={sort}
-          onChange={(e) => setSort(e.target.value as Sort)}
-          className="h-9 rounded-md border border-input bg-card px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
+        <NativeSelect aria-label="Sort recipes" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
           {SORTS.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       {recipes.isError ? (

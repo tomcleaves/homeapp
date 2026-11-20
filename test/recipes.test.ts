@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Meal, Recipe, RecipesResponse } from "@shared/types";
 import { normaliseRecipeUrl } from "@shared/recipes";
-import { call, put } from "./helpers";
+import { call, patch, post, put } from "./helpers";
 
 async function library() {
   const res = await call("/api/recipes");
@@ -11,14 +11,6 @@ async function library() {
 
 async function byUrl(url: string) {
   return (await library()).find((r) => r.url === url);
-}
-
-function post(path: string, body: unknown) {
-  return call(path, { method: "POST", body: JSON.stringify(body) });
-}
-
-function patch(path: string, body: unknown) {
-  return call(path, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 describe("normaliseRecipeUrl", () => {

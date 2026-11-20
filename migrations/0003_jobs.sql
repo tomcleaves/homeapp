@@ -1,0 +1,21 @@
+CREATE TABLE `jobs` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`title` text NOT NULL,
+	`severity` text DEFAULT 'med' NOT NULL,
+	`room` text,
+	`doer` text,
+	`notes` text DEFAULT '' NOT NULL,
+	`estimate_pence` integer,
+	`actual_pence` integer,
+	`done_at` integer,
+	`done_by` text,
+	`created_by` text,
+	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	FOREIGN KEY (`done_by`) REFERENCES `users`(`email`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`created_by`) REFERENCES `users`(`email`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "jobs_severity_check" CHECK("jobs"."severity" in ('low', 'med', 'high')),
+	CONSTRAINT "jobs_doer_check" CHECK("jobs"."doer" is null or "jobs"."doer" in ('diy', 'trade')),
+	CONSTRAINT "jobs_estimate_check" CHECK("jobs"."estimate_pence" is null or "jobs"."estimate_pence" >= 0),
+	CONSTRAINT "jobs_actual_check" CHECK("jobs"."actual_pence" is null or "jobs"."actual_pence" >= 0)
+);

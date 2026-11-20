@@ -1,9 +1,10 @@
-import { BookOpen, CalendarDays, LogOut } from "lucide-react";
+import { BookOpen, CalendarDays, Hammer, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SaveStatus } from "@/components/save-status";
 import { useMe } from "@/lib/queries";
 import { linkProps, usePathname } from "@/lib/router";
 import { cn } from "@/lib/utils";
+import { JobsPage } from "@/pages/jobs-page";
 import { RecipesPage } from "@/pages/recipes-page";
 import { WeekPage } from "@/pages/week-page";
 
@@ -11,14 +12,16 @@ import { WeekPage } from "@/pages/week-page";
 const SIGN_OUT_URL = "/cdn-cgi/access/logout";
 
 const PAGES = [
-  { path: "/", label: "Week plan", icon: CalendarDays },
-  { path: "/recipes", label: "Recipe library", icon: BookOpen },
+  { path: "/", label: "Week plan", short: "Week", icon: CalendarDays, Page: WeekPage },
+  { path: "/recipes", label: "Recipe library", short: "Recipes", icon: BookOpen, Page: RecipesPage },
+  { path: "/jobs", label: "House jobs", short: "Jobs", icon: Hammer, Page: JobsPage },
 ] as const;
 
 export default function App() {
   const me = useMe();
   const pathname = usePathname();
-  const onRecipes = pathname.replace(/\/+$/, "") === "/recipes";
+  const path = pathname.replace(/\/+$/, "") || "/";
+  const current = PAGES.find((p) => p.path === path) ?? PAGES[0];
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-3xl flex-col gap-5 px-4 pt-8 pb-16 sm:px-5">
@@ -28,7 +31,7 @@ export default function App() {
             The Weekly Table
           </h1>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Lunch &amp; dinner for the week, shared between the two of you.
+            Meals, recipes and house jobs, shared between the two of you.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -47,8 +50,8 @@ export default function App() {
       </header>
 
       <nav aria-label="Pages" className="flex gap-1 rounded-xl border bg-card p-1 shadow-sm">
-        {PAGES.map(({ path, label, icon: Icon }) => {
-          const active = (path === "/recipes") === onRecipes;
+        {PAGES.map(({ path, label, short, icon: Icon }) => {
+          const active = path === current.path;
           return (
             <a
               key={path}
@@ -61,14 +64,15 @@ export default function App() {
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >
-              <Icon className="size-4" />
-              {label}
+              <Icon className="size-4 shrink-0" />
+              <span className="sm:hidden">{short}</span>
+              <span className="hidden sm:inline">{label}</span>
             </a>
           );
         })}
       </nav>
 
-      {onRecipes ? <RecipesPage /> : <WeekPage />}
+      <current.Page />
     </div>
   );
 }

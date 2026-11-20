@@ -1,6 +1,6 @@
 # The Weekly Table
 
-A shared lunch & dinner planner for two, running entirely on Cloudflare's free tier.
+A shared home app for two (meal plan, recipe library, house-jobs list), running entirely on Cloudflare's free tier.
 
 | Layer | What |
 |---|---|

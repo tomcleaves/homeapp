@@ -45,3 +45,37 @@ export const meals = sqliteTable(
     check("meals_slot_check", sql`${t.slot} in ('lunch', 'dinner')`),
   ],
 );
+
+/**
+ * House jobs: small jobs around the house, ticked off as they're done.
+ * Money is whole pence (see shared/money.ts), never floating-point pounds.
+ */
+export const jobs = sqliteTable(
+  "jobs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    title: text("title").notNull(),
+    severity: text("severity", { enum: ["low", "med", "high"] }).notNull().default("med"),
+    room: text("room"),
+    // Who'll do it: ourselves, a tradesperson, or not decided (null).
+    doer: text("doer", { enum: ["diy", "trade"] }),
+    notes: text("notes").notNull().default(""),
+    estimatePence: integer("estimate_pence"),
+    actualPence: integer("actual_pence"),
+    doneAt: integer("done_at", { mode: "timestamp_ms" }),
+    doneBy: text("done_by").references(() => users.email),
+    createdBy: text("created_by").references(() => users.email),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    check("jobs_severity_check", sql`${t.severity} in ('low', 'med', 'high')`),
+    check("jobs_doer_check", sql`${t.doer} is null or ${t.doer} in ('diy', 'trade')`),
+    check("jobs_estimate_check", sql`${t.estimatePence} is null or ${t.estimatePence} >= 0`),
+    check("jobs_actual_check", sql`${t.actualPence} is null or ${t.actualPence} >= 0`),
+  ],
+);

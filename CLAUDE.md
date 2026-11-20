@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"The Weekly Table": a lunch & dinner planner shared by two people (Tom and Sophia), with a recipe library of everything they've planned, on Cloudflare's free tier. It replaces an earlier claude.ai artifact. Planned later (not built yet): ingredient extraction and per-meal cost estimates from Ocado order emails, which will hang off the `recipes` table. Keep everything within free-tier services.
+"The Weekly Table": a home app shared by two people (Tom and Sophia) on Cloudflare's free tier: a lunch & dinner planner, a recipe library of everything they've planned, and a house-jobs to-do list. It replaces an earlier claude.ai artifact. Planned later (not built yet): ingredient extraction and per-meal cost estimates from Ocado order emails, which will hang off the `recipes` table. Keep everything within free-tier services.
 
 ## Commands
 
@@ -45,22 +45,27 @@ There is no linter configured. Local dev requires `cp .dev.vars.example .dev.var
 - `PUT /api/meals/:date/:slot` merges partial updates. It attaches a recipe either by `recipeUrl` (find-or-create in the library) or by `recipeId`; send one or the other, and `null` detaches.
 - Links are stored canonical via `normaliseRecipeUrl` (`shared/recipes.ts`: tracking params and `#anchor` stripped, host lower-cased), so the same recipe pasted twice is one library entry. Validation in `worker/validation.ts` applies it.
 - A recipe's display name is its `title`, else the latest meal that used it, else the site's host (`recipeDisplayName`). `loadRecipes` in `worker/db/queries.ts` returns each recipe with every meal that used it, newest first.
+- `jobs` is the house-jobs list:
+  - `severity` is `low | med | high`, `doer` is `diy | trade | null` (null = not decided), and `room` is free text, whitespace-collapsed by the `room` validator;
+  - `done_at` null means still to do. `PATCH /api/jobs/:id` with `done: true|false` ticks a job off or back on; un-ticking keeps `actual_pence`, and re-ticking keeps the original `done_at`.
+- **Money is whole pence (integers) everywhere**: `estimate_pence`/`actual_pence` in the DB and API. Convert only at the UI edge with `shared/money.ts`: `parsePounds` for input, `formatPence` for display, `penceToInput` to pre-fill fields.
 - Schema changes go through `pnpm db:generate`. Never hand-edit or rewrite migrations that may already be applied; tests apply them in order. Drizzle omits `ON DELETE` on `ALTER TABLE … ADD` columns and can't express data backfills, so check a newly generated file before committing it (`0001_recipes.sql` was amended for both).
 
 **Dates are `YYYY-MM-DD` strings everywhere**, with all arithmetic in UTC in `shared/week.ts` (weeks start Monday; `GET /api/weeks/:date` normalises any date to its Monday). Use those helpers rather than `Date` math, so the UK clock changes can't shift days. Only `localToday()` uses the browser's local time.
 
 **Frontend ↔ API contract** is the plain types in `shared/types.ts`, consumed by `src/lib/api.ts` (a `fetch` wrapper). Hono's typed RPC client (`hc<AppType>`) is deliberately not used: importing Worker types into the DOM tsconfig pulls in Workers globals. The three tsconfigs (`app`, `worker`, `node`) keep those environments separate. `@shared/*` is aliased in both Vite and the tsconfigs.
 
-**Pages**: two, the week plan (`/`, week in `?week=`) and the recipe library (`/recipes`). Routing is a tiny `pushState` router in `src/lib/router.ts` (`usePathname`, `navigate`, `linkProps`); add a real router only if pages multiply. Library search is client-side (`src/lib/search.ts`, accent-insensitive, every word must match), since the whole library is fetched at once.
+**Pages**: three, listed in `PAGES` in `src/App.tsx`, which matches the path to a page component: the week plan (`/`, week in `?week=`), the recipe library (`/recipes`) and house jobs (`/jobs`). Routing is a tiny `pushState` router in `src/lib/router.ts` (`usePathname`, `navigate`, `linkProps`); add a real router only if pages multiply. On the jobs page, filtering and sorting are client-side (`src/lib/jobs.ts`). Jobs ticked off during a visit stay in the to-do list, struck through, until you leave the page (`justDone` in `src/pages/jobs-page.tsx`), so the "what did it cost?" prompt stays visible. Library search is client-side (`src/lib/search.ts`, accent-insensitive, every word must match), since the whole library is fetched at once.
 
 **Client state** (`src/lib/queries.ts`, TanStack Query):
 - Each week is cached under `["week", monday]`; the library under `["recipes"]`. Meal mutations patch the week cache from the server response and invalidate the library. Library mutations invalidate both, since weeks show recipe names.
-- Weeks poll every 20s to pick up the other person's edits (there is no realtime sync).
+- Jobs are cached under `["jobs"]`. `useUpdateJob` is optimistic: it patches the cache in `onMutate` and rolls back on error, so ticking off feels instant.
+- Weeks poll every 20s and jobs every 30s to pick up the other person's edits (there is no realtime sync).
 - `MealSlot` keeps a local draft and debounces saves (600 ms). It only adopts server values when the field isn't focused, dirty or mid-save. It flushes a pending edit on blur and on unmount, which happens when changing weeks.
 - An expired Access session shows up as a redirect or non-JSON response. `api.ts` turns that into `SignedOutError`, and the UI offers a reload.
 
 **UI**:
-- shadcn/ui (new-york) in `src/components/ui`, Tailwind v4 configured in CSS: `src/index.css` maps the app's palette onto shadcn tokens and adds a custom `warm` colour. There is no `tailwind.config`.
+- shadcn/ui (new-york) in `src/components/ui`. App-level pieces shared by pages are `Segmented` (radio-group buttons), `NativeSelect`, and `Notice`/`LoadError`. Styling uses Tailwind v4, Tailwind v4 configured in CSS: `src/index.css` maps the app's palette onto shadcn tokens and adds a custom `warm` colour. There is no `tailwind.config`.
 - Dark mode follows the system setting via a `.dark` class toggled in `src/main.tsx`.
 - The shadcn registry may be blocked in cloud sandboxes. If `pnpm dlx shadcn add` fails, write the component from shadcn's source by hand.
 

@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Meal, MealUpdate, RecipeInput, RecipePatch, WeekResponse } from "@shared/types";
+import type {
+  Job,
+  JobInput,
+  JobPatch,
+  JobsResponse,
+  Meal,
+  MealUpdate,
+  RecipeInput,
+  RecipePatch,
+  WeekResponse,
+} from "@shared/types";
 import { addDays, mondayOf, type Slot } from "@shared/week";
 import { api } from "./api";
 
@@ -82,4 +92,63 @@ export function useUpdateRecipe() {
 export function useDeleteRecipe() {
   const invalidate = useInvalidateRecipes();
   return useMutation({ mutationFn: (id: number) => api.deleteRecipe(id), onSuccess: invalidate });
+}
+
+const JOBS_KEY = ["jobs"] as const;
+
+export function useJobs() {
+  // Polls so the other person's changes show up; pauses while the tab is hidden.
+  return useQuery({ queryKey: JOBS_KEY, queryFn: api.jobs, refetchInterval: 30_000 });
+}
+
+function replaceJob(data: JobsResponse | undefined, job: Job): JobsResponse | undefined {
+  return data && { jobs: data.jobs.map((j) => (j.id === job.id ? job : j)) };
+}
+
+export function useCreateJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: JobInput) => api.createJob(input),
+    onSuccess: ({ job }) => {
+      qc.setQueryData<JobsResponse>(JOBS_KEY, (d) => d && { jobs: [...d.jobs, job] });
+    },
+  });
+}
+
+/**
+ * Edits a job. Applied to the cache straight away (so ticking a job off
+ * feels instant) and rolled back if the server refuses.
+ */
+export function useUpdateJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: number; patch: JobPatch }) => api.updateJob(v.id, v.patch),
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: JOBS_KEY });
+      const previous = qc.getQueryData<JobsResponse>(JOBS_KEY);
+      const job = previous?.jobs.find((j) => j.id === id);
+      if (job) {
+        const { done, ...fields } = patch;
+        const doneAt = done === undefined ? job.doneAt : done ? (job.doneAt ?? Date.now()) : null;
+        qc.setQueryData(JOBS_KEY, replaceJob(previous, { ...job, ...fields, doneAt }));
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(JOBS_KEY, context.previous);
+    },
+    onSuccess: ({ job }) => {
+      qc.setQueryData<JobsResponse>(JOBS_KEY, (d) => replaceJob(d, job));
+    },
+  });
+}
+
+export function useDeleteJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteJob(id),
+    onSuccess: (_res, id) => {
+      qc.setQueryData<JobsResponse>(JOBS_KEY, (d) => d && { jobs: d.jobs.filter((j) => j.id !== id) });
+    },
+  });
 }

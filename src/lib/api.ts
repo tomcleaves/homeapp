@@ -1,4 +1,8 @@
 import type {
+  Job,
+  JobInput,
+  JobPatch,
+  JobsResponse,
   Meal,
   MealUpdate,
   MeResponse,
@@ -69,4 +73,14 @@ export const api = {
     request<{ recipe: Recipe }>(`/api/recipes/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   deleteRecipe: (id: number) => request<{ ok: true }>(`/api/recipes/${id}`, { method: "DELETE" }),
+
+  jobs: () => request<JobsResponse>("/api/jobs"),
+
+  createJob: (input: JobInput) =>
+    request<{ job: Job }>("/api/jobs", { method: "POST", body: JSON.stringify(input) }),
+
+  updateJob: (id: number, patch: JobPatch) =>
+    request<{ job: Job }>(`/api/jobs/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  deleteJob: (id: number) => request<{ ok: true }>(`/api/jobs/${id}`, { method: "DELETE" }),
 };
