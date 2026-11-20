@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { type AnySQLiteColumn, check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /** People who have signed in through Cloudflare Access. */
 export const users = sqliteTable("users", {
@@ -64,6 +64,13 @@ export const jobs = sqliteTable(
     actualPence: integer("actual_pence"),
     doneAt: integer("done_at", { mode: "timestamp_ms" }),
     doneBy: text("done_by").references(() => users.email),
+    // YYYY-MM-DD. Any job can have one; recurring jobs always get one.
+    dueOn: text("due_on"),
+    // Repeat every N units; both set or both null (enforced in validation).
+    repeatEvery: integer("repeat_every"),
+    repeatUnit: text("repeat_unit", { enum: ["week", "month", "year"] }),
+    // The copy created when this recurring job was ticked off.
+    nextJobId: integer("next_job_id").references((): AnySQLiteColumn => jobs.id, { onDelete: "set null" }),
     createdBy: text("created_by").references(() => users.email),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
@@ -78,4 +85,22 @@ export const jobs = sqliteTable(
     check("jobs_estimate_check", sql`${t.estimatePence} is null or ${t.estimatePence} >= 0`),
     check("jobs_actual_check", sql`${t.actualPence} is null or ${t.actualPence} >= 0`),
   ],
+);
+
+/** Parts to buy for a job, each with an optional shop link. */
+export const jobParts = sqliteTable(
+  "job_parts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    url: text("url"),
+    boughtAt: integer("bought_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("job_parts_job_id_idx").on(t.jobId)],
 );

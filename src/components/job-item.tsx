@@ -1,18 +1,33 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, HardHat, MapPin, NotebookPen, Wrench } from "lucide-react";
+import { CalendarClock, ChevronDown, ChevronUp, HardHat, MapPin, NotebookPen, Package, Repeat, Wrench } from "lucide-react";
 import type { Doer, Job, JobPatch, Severity } from "@shared/types";
 import { formatPence, parsePounds, penceToInput } from "@shared/money";
+import { isIsoDate, localToday, repeatLabel } from "@shared/week";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { JobParts } from "@/components/job-parts";
+import { NativeSelect } from "@/components/native-select";
 import { Segmented } from "@/components/segmented";
-import { DOER_LABEL, DOER_OPTIONS, ROOMS_DATALIST_ID, SEVERITIES, SEVERITY_LABEL } from "@/lib/jobs";
+import {
+  DOER_LABEL,
+  DOER_OPTIONS,
+  dueState,
+  repeatOptionsFor,
+  repeatToValue,
+  ROOMS_DATALIST_ID,
+  SEVERITIES,
+  SEVERITY_LABEL,
+  valueToRepeat,
+} from "@/lib/jobs";
 import { useDeleteJob, useUpdateJob } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const doneDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const dueFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const formatDue = (iso: string) => dueFmt.format(new Date(iso + "T00:00:00Z"));
 
 /** Classes for the severity badge and the selected severity option. */
 export const SEVERITY_TONE: Record<Severity, string> = {
@@ -29,9 +44,17 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
   );
 }
 
-function Chip({ icon: Icon, children }: { icon: typeof MapPin; children: React.ReactNode }) {
+function Chip({
+  icon: Icon,
+  children,
+  className,
+}: {
+  icon: typeof MapPin;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+    <span className={cn("inline-flex items-center gap-1 text-xs text-muted-foreground", className)}>
       <Icon className="size-3 shrink-0" />
       {children}
     </span>
@@ -102,6 +125,8 @@ function JobEditor({ job, onClose }: { job: Job; onClose: () => void }) {
   const [estimate, setEstimate] = useState(penceToInput(job.estimatePence));
   const [actual, setActual] = useState(penceToInput(job.actualPence));
   const [notes, setNotes] = useState(job.notes);
+  const [repeatValue, setRepeatValue] = useState(repeatToValue(job.repeat));
+  const [dueOn, setDueOn] = useState(job.dueOn ?? "");
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const update = useUpdateJob();
@@ -123,6 +148,9 @@ function JobEditor({ job, onClose }: { job: Job; onClose: () => void }) {
     if (est.pence !== job.estimatePence) patch.estimatePence = est.pence;
     if (done && act.pence !== job.actualPence) patch.actualPence = act.pence;
     if (notes !== job.notes) patch.notes = notes;
+    if (repeatValue !== repeatToValue(job.repeat)) patch.repeat = valueToRepeat(repeatValue);
+    if (dueOn && !isIsoDate(dueOn)) return setError("Pick a due date");
+    if ((dueOn || null) !== job.dueOn) patch.dueOn = dueOn || null;
     if (!Object.keys(patch).length) return onClose();
     try {
       await update.mutateAsync({ id: job.id, patch });
@@ -158,6 +186,27 @@ function JobEditor({ job, onClose }: { job: Job; onClose: () => void }) {
         <div className="flex flex-col gap-1">
           <span className={labelClass}>Who’ll do it</span>
           <Segmented label="Who’ll do it" value={doer} options={DOER_OPTIONS} onChange={setDoer} />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <label htmlFor={id("repeat")} className={labelClass}>
+            Repeats
+          </label>
+          <NativeSelect id={id("repeat")} value={repeatValue} onChange={(e) => setRepeatValue(e.target.value)}>
+            {repeatOptionsFor(job.repeat).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor={id("due")} className={labelClass}>
+            Due
+          </label>
+          <Input id={id("due")} type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
         </div>
       </div>
 
@@ -252,6 +301,7 @@ export function JobItem({ job, onToggle }: { job: Job; onToggle?: (id: number, d
   const [askCost, setAskCost] = useState(false);
   const update = useUpdateJob();
   const done = job.doneAt !== null;
+  const due = dueState(job, localToday());
 
   function toggle(checked: boolean) {
     update.mutate({ id: job.id, patch: { done: checked } });
@@ -294,6 +344,22 @@ export function JobItem({ job, onToggle }: { job: Job; onToggle?: (id: number, d
             {job.room && <Chip icon={MapPin}>{job.room}</Chip>}
             {job.doer && <Chip icon={job.doer === "trade" ? HardHat : Wrench}>{DOER_LABEL[job.doer]}</Chip>}
             {cost && <span className="text-xs font-medium tabular-nums">{cost}</span>}
+            {!done && due === "overdue" && (
+              <Chip icon={CalendarClock} className="font-medium text-destructive">
+                Overdue · {formatDue(job.dueOn!)}
+              </Chip>
+            )}
+            {!done && (due === "due-soon" || due === "upcoming") && (
+              <Chip icon={CalendarClock} className={cn(due === "due-soon" && "font-medium text-warm")}>
+                Due {formatDue(job.dueOn!)}
+              </Chip>
+            )}
+            {job.repeat && <Chip icon={Repeat}>{repeatLabel(job.repeat.every, job.repeat.unit)}</Chip>}
+            {job.parts.length > 0 && (
+              <Chip icon={Package}>
+                Parts {job.parts.filter((p) => p.boughtAt !== null).length}/{job.parts.length}
+              </Chip>
+            )}
             {done && <span className="text-xs text-muted-foreground">Done {doneDate.format(job.doneAt!)}</span>}
             {job.notes.trim() && !editing && (
               <Chip icon={NotebookPen}>
@@ -315,7 +381,12 @@ export function JobItem({ job, onToggle }: { job: Job; onToggle?: (id: number, d
       </div>
 
       {askCost && done && !editing && <CostPrompt job={job} onClose={() => setAskCost(false)} />}
-      {editing && <JobEditor job={job} onClose={() => setEditing(false)} />}
+      {editing && (
+        <>
+          <JobParts job={job} />
+          <JobEditor job={job} onClose={() => setEditing(false)} />
+        </>
+      )}
     </article>
   );
 }

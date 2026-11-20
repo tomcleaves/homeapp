@@ -1,4 +1,4 @@
-import type { Slot } from "./week";
+import type { RepeatUnit, Slot } from "./week";
 
 /** The recipe attached to a meal. */
 export interface MealRecipe {
@@ -71,6 +71,20 @@ export interface RecipePatch {
 export type Severity = "low" | "med" | "high";
 export type Doer = "diy" | "trade";
 
+export interface Repeat {
+  every: number;
+  unit: RepeatUnit;
+}
+
+/** Something to buy for a job. */
+export interface Part {
+  id: number;
+  name: string;
+  url: string | null;
+  /** ms since epoch; null until bought. */
+  boughtAt: number | null;
+}
+
 export interface Job {
   id: number;
   title: string;
@@ -85,6 +99,11 @@ export interface Job {
   /** ms since epoch; null while still to do. */
   doneAt: number | null;
   doneBy: string | null;
+  /** YYYY-MM-DD, or null for no due date. */
+  dueOn: string | null;
+  /** null for a one-off job. */
+  repeat: Repeat | null;
+  parts: Part[];
   createdBy: string | null;
   createdAt: number;
   updatedAt: number;
@@ -101,9 +120,31 @@ export interface JobInput {
   doer?: Doer | null;
   notes?: string;
   estimatePence?: number | null;
+  dueOn?: string | null;
+  repeat?: Repeat | null;
 }
 
 export interface JobPatch extends Partial<JobInput> {
   actualPence?: number | null;
   done?: boolean;
+  /** The browser's local date, used to date the next copy of a recurring job. */
+  today?: string;
+}
+
+/** A job change can also create (tick off) or remove (un-tick) the next recurring copy. */
+export interface JobUpdateResponse {
+  job: Job;
+  created?: Job;
+  removedId?: number;
+}
+
+export interface PartInput {
+  name: string;
+  url?: string | null;
+}
+
+export interface PartPatch {
+  name?: string;
+  url?: string | null;
+  bought?: boolean;
 }

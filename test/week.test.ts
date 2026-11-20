@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, isIsoDate, mondayOf, weekDates } from "@shared/week";
+import { addDays, addInterval, isIsoDate, mondayOf, weekDates } from "@shared/week";
 
 describe("week helpers", () => {
   it("finds the Monday of a week", () => {
@@ -27,5 +27,24 @@ describe("week helpers", () => {
     expect(isIsoDate("2026-02-30")).toBe(false);
     expect(isIsoDate("2026-2-3")).toBe(false);
     expect(isIsoDate("yesterday")).toBe(false);
+  });
+});
+
+describe("addInterval", () => {
+  it("adds weeks", () => {
+    expect(addInterval("2026-11-20", 1, "week")).toBe("2026-11-27");
+    expect(addInterval("2026-12-28", 2, "week")).toBe("2027-01-11");
+  });
+
+  it("adds months, clamping to the end of shorter months", () => {
+    expect(addInterval("2026-11-20", 6, "month")).toBe("2027-05-20");
+    expect(addInterval("2027-01-31", 1, "month")).toBe("2027-02-28");
+    expect(addInterval("2028-01-31", 1, "month")).toBe("2028-02-29"); // leap year
+    expect(addInterval("2026-08-31", 3, "month")).toBe("2026-11-30");
+  });
+
+  it("adds years, including from 29 February", () => {
+    expect(addInterval("2026-11-20", 1, "year")).toBe("2027-11-20");
+    expect(addInterval("2028-02-29", 1, "year")).toBe("2029-02-28");
   });
 });

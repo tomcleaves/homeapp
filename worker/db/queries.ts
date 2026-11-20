@@ -1,8 +1,8 @@
 import { and, asc, desc, eq, isNotNull, type SQL } from "drizzle-orm";
-import type { Meal, Recipe } from "@shared/types";
+import type { Job, Meal, Part, Recipe } from "@shared/types";
 import { recipeDisplayName, recipeHost } from "@shared/recipes";
 import type { getDb } from "./client";
-import { meals, recipes } from "./schema";
+import { jobParts, jobs, meals, recipes } from "./schema";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -74,4 +74,47 @@ export async function loadRecipes(db: Db, id?: number): Promise<Recipe[]> {
       uses,
     };
   });
+}
+
+/** Jobs with their parts (oldest part first). `id` narrows to one job. */
+export async function loadJobs(db: Db, id?: number): Promise<Job[]> {
+  const [jobRows, partRows] = await Promise.all([
+    db.select().from(jobs).where(id === undefined ? undefined : eq(jobs.id, id)),
+    db
+      .select()
+      .from(jobParts)
+      .where(id === undefined ? undefined : eq(jobParts.jobId, id))
+      .orderBy(asc(jobParts.id)),
+  ]);
+
+  const partsByJob = new Map<number, Part[]>();
+  for (const p of partRows) {
+    const list = partsByJob.get(p.jobId) ?? [];
+    list.push({ id: p.id, name: p.name, url: p.url, boughtAt: p.boughtAt ? p.boughtAt.getTime() : null });
+    partsByJob.set(p.jobId, list);
+  }
+
+  return jobRows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    severity: row.severity,
+    room: row.room,
+    doer: row.doer,
+    notes: row.notes,
+    estimatePence: row.estimatePence,
+    actualPence: row.actualPence,
+    doneAt: row.doneAt ? row.doneAt.getTime() : null,
+    doneBy: row.doneBy,
+    dueOn: row.dueOn,
+    repeat: row.repeatEvery && row.repeatUnit ? { every: row.repeatEvery, unit: row.repeatUnit } : null,
+    parts: partsByJob.get(row.id) ?? [],
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.getTime(),
+    updatedAt: row.updatedAt.getTime(),
+  }));
+}
+
+export async function loadJob(db: Db, id: number): Promise<Job | null> {
+  const [job] = await loadJobs(db, id);
+  return job ?? null;
 }

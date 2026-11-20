@@ -1,17 +1,23 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Plus, Search } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Doer, Job, Severity } from "@shared/types";
 import { formatPence, parsePounds } from "@shared/money";
+import { isIsoDate, localToday } from "@shared/week";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { JobItem, SEVERITY_TONE } from "@/components/job-item";
+import { JobItem, SeverityBadge, SEVERITY_TONE } from "@/components/job-item";
+import { PartRow } from "@/components/job-parts";
 import { NativeSelect } from "@/components/native-select";
 import { LoadError, Notice } from "@/components/notice";
 import { Segmented } from "@/components/segmented";
 import {
   DOER_OPTIONS,
+  dueState,
+  REPEAT_OPTIONS,
+  valueToRepeat,
   JOB_SORTS,
   jobMatches,
   jobSorters,
@@ -36,10 +42,13 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   );
 }
 
-function Summary({ jobs }: { jobs: Job[] }) {
+function Summary({ jobs, today }: { jobs: Job[]; today: string }) {
   const open = jobs.filter((j) => j.doneAt === null);
   const done = jobs.filter((j) => j.doneAt !== null);
-  const high = open.filter((j) => j.severity === "high").length;
+  const current = open.filter((j) => dueState(j, today) !== "upcoming");
+  const high = current.filter((j) => j.severity === "high").length;
+  const overdue = current.filter((j) => dueState(j, today) === "overdue").length;
+  const toDoNote = [overdue && `${overdue} overdue`, high && `${high} high`].filter(Boolean).join(" · ");
   const unestimated = open.filter((j) => j.estimatePence === null).length;
   const uncosted = done.filter((j) => j.actualPence === null).length;
   const toSpend = open.reduce((sum, j) => sum + (j.estimatePence ?? 0), 0);
@@ -47,7 +56,7 @@ function Summary({ jobs }: { jobs: Job[] }) {
 
   return (
     <div className="grid grid-cols-3 gap-2">
-      <Stat label="To do" value={String(open.length)} note={high ? `${high} high` : undefined} />
+      <Stat label="To do" value={String(current.length)} note={toDoNote || undefined} />
       <Stat
         label="Estimated"
         value={formatPence(toSpend)}
@@ -66,12 +75,15 @@ function AddJobForm() {
   const [doer, setDoer] = useState<Doer | "none">("none");
   const [estimate, setEstimate] = useState("");
   const [notes, setNotes] = useState("");
+  const [repeatValue, setRepeatValue] = useState("none");
+  const [dueOn, setDueOn] = useState("");
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const create = useCreateJob();
 
   async function submit() {
     if (!title.trim()) return setError("What needs doing?");
+    if (dueOn && !isIsoDate(dueOn)) return setError("Pick a due date");
     let estimatePence: number | null = null;
     if (estimate.trim()) {
       estimatePence = parsePounds(estimate);
@@ -85,6 +97,8 @@ function AddJobForm() {
         doer: doer === "none" ? null : doer,
         notes,
         estimatePence,
+        repeat: valueToRepeat(repeatValue),
+        dueOn: dueOn || null,
       });
       setTitle("");
       setSeverity("med");
@@ -92,6 +106,8 @@ function AddJobForm() {
       setDoer("none");
       setEstimate("");
       setNotes("");
+      setRepeatValue("none");
+      setDueOn("");
       setError(null);
       titleRef.current?.focus();
     } catch (e) {
@@ -170,6 +186,26 @@ function AddJobForm() {
                 />
               </div>
             </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="new-job-repeat" className={labelClass}>
+                  Repeats
+                </label>
+                <NativeSelect id="new-job-repeat" value={repeatValue} onChange={(e) => setRepeatValue(e.target.value)}>
+                  {REPEAT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="new-job-due" className={labelClass}>
+                  Due
+                </label>
+                <Input id="new-job-due" type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
+              </div>
+            </div>
             <div className="flex flex-col gap-1">
               <span className={labelClass}>Who’ll do it</span>
               <Segmented label="Who’ll do it" value={doer} options={DOER_OPTIONS} onChange={setDoer} className="self-start" />
@@ -195,6 +231,98 @@ function AddJobForm() {
   );
 }
 
+/** A section that starts collapsed, e.g. "Coming up (3)". */
+function Collapsible({
+  label,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        {label} ({count})
+      </button>
+      {open && (
+        <ul aria-label={label} className="flex flex-col gap-2">
+          {children}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const dueShort = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
+/** Every part still to buy, across all open jobs, grouped by job. */
+function ShoppingList({ jobs, today }: { jobs: Job[]; today: string }) {
+  const [showBought, setShowBought] = useState(false);
+  const open = jobs
+    .filter((j) => j.doneAt === null && j.parts.length > 0)
+    .sort((a, b) => (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || jobSorters.urgent(a, b));
+  const groups = open
+    .map((j) => ({ job: j, parts: j.parts.filter((p) => showBought || p.boughtAt === null) }))
+    .filter((g) => g.parts.length > 0);
+  const boughtCount = open.reduce((n, j) => n + j.parts.filter((p) => p.boughtAt !== null).length, 0);
+
+  return (
+    <section aria-label="Shopping list" className="flex flex-col gap-3">
+      {groups.length === 0 ? (
+        <Notice title={boughtCount ? "Everything’s bought" : "Nothing to buy"}>
+          {boughtCount
+            ? "Every part for your open jobs is ticked off."
+            : "Open a job and add the parts it needs; they’ll all gather here."}
+        </Notice>
+      ) : (
+        groups.map(({ job, parts }) => {
+          const due = dueState(job, today);
+          return (
+            <Card key={job.id} className="gap-1 px-3.5 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-medium">{job.title}</h3>
+                <SeverityBadge severity={job.severity} />
+                {job.room && <span className="text-xs text-muted-foreground">{job.room}</span>}
+                {job.dueOn && (
+                  <span className={cn("text-xs text-muted-foreground", due === "overdue" && "font-medium text-destructive")}>
+                    {due === "overdue" ? "Overdue" : "Due"} {dueShort.format(new Date(job.dueOn + "T00:00:00Z"))}
+                  </span>
+                )}
+              </div>
+              <ul className="flex flex-col divide-y">
+                {parts.map((p) => (
+                  <PartRow key={p.id} part={p} removable={false} />
+                ))}
+              </ul>
+            </Card>
+          )
+        })
+      )}
+      {boughtCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowBought((v) => !v)}
+          className="self-start text-xs font-medium text-primary hover:underline"
+        >
+          {showBought ? "Hide bought parts" : `Show bought parts (${boughtCount})`}
+        </button>
+      )}
+    </section>
+  );
+}
+
 type SeverityFilter = Severity | "all";
 type DoerFilter = Doer | "none" | "all";
 
@@ -206,6 +334,9 @@ export function JobsPage() {
   const [doer, setDoer] = useState<DoerFilter>("all");
   const [sort, setSort] = useState<JobSort>("urgent");
   const [showDone, setShowDone] = useState(false);
+  const [showComingUp, setShowComingUp] = useState(false);
+  const [view, setView] = useState<"jobs" | "shopping">("jobs");
+  const today = localToday();
   // Jobs ticked off on this visit stay where they are (struck through), so the
   // "what did it cost?" prompt can be answered and a mis-tap undone.
   const [justDone, setJustDone] = useState<Set<number>>(new Set());
@@ -224,7 +355,16 @@ export function JobsPage() {
     );
   }, [all, query, severity, room, doer]);
 
-  const toDo = filtered.filter((j) => j.doneAt === null || justDone.has(j.id)).sort(jobSorters[sort]);
+  const isUpcoming = (j: Job) => j.doneAt === null && dueState(j, today) === "upcoming";
+  const toDo = filtered
+    .filter((j) => justDone.has(j.id) || (j.doneAt === null && !isUpcoming(j)))
+    .sort(jobSorters[sort]);
+  const comingUp = filtered
+    .filter((j) => isUpcoming(j) && !justDone.has(j.id))
+    .sort((a, b) => a.dueOn!.localeCompare(b.dueOn!));
+  const toBuy = (all ?? [])
+    .filter((j) => j.doneAt === null)
+    .reduce((n, j) => n + j.parts.filter((p) => p.boughtAt === null).length, 0);
   const done = filtered
     .filter((j) => j.doneAt !== null && !justDone.has(j.id))
     .sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
@@ -271,7 +411,22 @@ export function JobsPage() {
         </div>
       ) : (
         <>
-          <Summary jobs={all} />
+          <Summary jobs={all} today={today} />
+          <Segmented
+            label="View"
+            value={view}
+            onChange={setView}
+            className="self-start"
+            options={[
+              { value: "jobs", label: "Jobs" },
+              { value: "shopping", label: toBuy ? `Shopping list (${toBuy})` : "Shopping list" },
+            ]}
+          />
+
+          {view === "shopping" ? (
+            <ShoppingList jobs={all} today={today} />
+          ) : (
+          <>
           <AddJobForm />
 
           {all.length > 0 && (
@@ -348,7 +503,7 @@ export function JobsPage() {
                   </button>
                 </>
               ) : (
-                "All done. Nothing left on the list."
+                comingUp.length ? "Nothing due right now." : "All done. Nothing left on the list."
               )}
             </p>
           ) : (
@@ -361,29 +516,26 @@ export function JobsPage() {
             </ul>
           )}
 
+          {comingUp.length > 0 && (
+            <Collapsible label="Coming up" count={comingUp.length} open={showComingUp} onToggle={() => setShowComingUp((v) => !v)}>
+              {comingUp.map((j) => (
+                <li key={j.id}>
+                  <JobItem job={j} onToggle={onToggle} />
+                </li>
+              ))}
+            </Collapsible>
+          )}
+
           {done.length > 0 && (
-            <section className="flex flex-col gap-2">
-              <button
-                type="button"
-                aria-expanded={showDone}
-                onClick={() => setShowDone((v) => !v)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {showDone ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                Done ({done.length})
-              </button>
-              {showDone && (
-                <ul aria-label="Done jobs" className="flex flex-col gap-2">
-                  {done.map((j) => (
-                    <li key={j.id}>
-                      <JobItem job={j} onToggle={onToggle} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+            <Collapsible label="Done" count={done.length} open={showDone} onToggle={() => setShowDone((v) => !v)}>
+              {done.map((j) => (
+                <li key={j.id}>
+                  <JobItem job={j} onToggle={onToggle} />
+                </li>
+              ))}
+            </Collapsible>
+          )}
+          </>
           )}
         </>
       )}

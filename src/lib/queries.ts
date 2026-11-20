@@ -5,12 +5,14 @@ import type {
   JobPatch,
   JobsResponse,
   Meal,
+  PartInput,
+  PartPatch,
   MealUpdate,
   RecipeInput,
   RecipePatch,
   WeekResponse,
 } from "@shared/types";
-import { addDays, mondayOf, type Slot } from "@shared/week";
+import { addDays, localToday, mondayOf, type Slot } from "@shared/week";
 import { api } from "./api";
 
 export const weekKey = (weekStart: string) => ["week", weekStart] as const;
@@ -122,25 +124,79 @@ export function useCreateJob() {
 export function useUpdateJob() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { id: number; patch: JobPatch }) => api.updateJob(v.id, v.patch),
+    // `today` dates the next copy when a recurring job is ticked off.
+    mutationFn: (v: { id: number; patch: JobPatch }) =>
+      api.updateJob(v.id, v.patch.done ? { ...v.patch, today: localToday() } : v.patch),
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: JOBS_KEY });
       const previous = qc.getQueryData<JobsResponse>(JOBS_KEY);
       const job = previous?.jobs.find((j) => j.id === id);
       if (job) {
-        const { done, ...fields } = patch;
+        const { done, today: _today, ...fields } = patch;
         const doneAt = done === undefined ? job.doneAt : done ? (job.doneAt ?? Date.now()) : null;
-        qc.setQueryData(JOBS_KEY, replaceJob(previous, { ...job, ...fields, doneAt }));
+        qc.setQueryData(JOBS_KEY, replaceJob(previous, { ...job, ...fields, doneAt } as Job));
       }
       return { previous };
     },
     onError: (_err, _vars, context) => {
       if (context?.previous) qc.setQueryData(JOBS_KEY, context.previous);
     },
-    onSuccess: ({ job }) => {
-      qc.setQueryData<JobsResponse>(JOBS_KEY, (d) => replaceJob(d, job));
+    onSuccess: ({ job, created, removedId }) => {
+      qc.setQueryData<JobsResponse>(JOBS_KEY, (d) => {
+        if (!d) return d;
+        let list = d.jobs.map((j) => (j.id === job.id ? job : j)).filter((j) => j.id !== removedId);
+        if (created && !list.some((j) => j.id === created.id)) list = [...list, created];
+        return { jobs: list };
+      });
     },
   });
+}
+
+/** Part changes come back as the whole job, which replaces the cached one. */
+function useReplaceJob() {
+  const qc = useQueryClient();
+  return ({ job }: { job: Job }) => {
+    qc.setQueryData<JobsResponse>(JOBS_KEY, (d) => replaceJob(d, job));
+  };
+}
+
+export function useAddPart() {
+  const replace = useReplaceJob();
+  return useMutation({
+    mutationFn: (v: { jobId: number; input: PartInput }) => api.addPart(v.jobId, v.input),
+    onSuccess: replace,
+  });
+}
+
+/** Optimistic for the bought tick-box, so the shopping list feels instant. */
+export function useUpdatePart() {
+  const qc = useQueryClient();
+  const replace = useReplaceJob();
+  return useMutation({
+    mutationFn: (v: { id: number; patch: PartPatch }) => api.updatePart(v.id, v.patch),
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: JOBS_KEY });
+      const previous = qc.getQueryData<JobsResponse>(JOBS_KEY);
+      if (previous && patch.bought !== undefined) {
+        qc.setQueryData<JobsResponse>(JOBS_KEY, {
+          jobs: previous.jobs.map((j) => ({
+            ...j,
+            parts: j.parts.map((p) => (p.id === id ? { ...p, boughtAt: patch.bought ? Date.now() : null } : p)),
+          })),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(JOBS_KEY, context.previous);
+    },
+    onSuccess: replace,
+  });
+}
+
+export function useDeletePart() {
+  const replace = useReplaceJob();
+  return useMutation({ mutationFn: (id: number) => api.deletePart(id), onSuccess: replace });
 }
 
 export function useDeleteJob() {

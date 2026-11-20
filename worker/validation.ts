@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { MAX_PENCE } from "@shared/money";
 import { normaliseRecipeUrl } from "@shared/recipes";
-import { isIsoDate } from "@shared/week";
+import { isIsoDate, REPEAT_UNITS } from "@shared/week";
 
 export const isoDate = z.string().refine(isIsoDate, "Expected a date as YYYY-MM-DD");
 
-/** An http(s) link, returned in canonical form (see normaliseRecipeUrl). */
-export const recipeUrl = z
+/**
+ * An http(s) link, returned in canonical form (see normaliseRecipeUrl):
+ * tracking params and #anchors dropped. Used for recipe and shop links.
+ */
+export const webUrl = z
   .string()
   .max(2000)
   .transform((v, ctx) => {
@@ -17,6 +20,8 @@ export const recipeUrl = z
     }
     return url;
   });
+
+export const recipeUrl = webUrl;
 
 export const recipeTitle = z
   .string()
@@ -37,3 +42,8 @@ export const room = z
   .max(60)
   .transform((v) => v.trim().replace(/\s+/g, " ") || null)
   .nullable();
+
+export const repeat = z.object({
+  every: z.number().int().min(1).max(52),
+  unit: z.enum(REPEAT_UNITS),
+});

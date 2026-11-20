@@ -55,3 +55,34 @@ export function localToday(now: Date = new Date()): string {
   const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
+
+export const REPEAT_UNITS = ["week", "month", "year"] as const;
+export type RepeatUnit = (typeof REPEAT_UNITS)[number];
+
+/**
+ * `date` plus `every` weeks/months/years. Months clamp to the month's last
+ * day, so 31 Jan + 1 month is 28 (or 29) Feb, not 3 March.
+ */
+export function addInterval(date: string, every: number, unit: RepeatUnit): string {
+  if (unit === "week") return addDays(date, every * 7);
+  const d = parse(date);
+  const months = unit === "year" ? every * 12 : every;
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d.getUTCDate(), lastDay));
+  return format(target);
+}
+
+export const REPEAT_PRESETS: { every: number; unit: RepeatUnit; label: string }[] = [
+  { every: 1, unit: "week", label: "Every week" },
+  { every: 2, unit: "week", label: "Every 2 weeks" },
+  { every: 1, unit: "month", label: "Every month" },
+  { every: 3, unit: "month", label: "Every 3 months" },
+  { every: 6, unit: "month", label: "Every 6 months" },
+  { every: 1, unit: "year", label: "Every year" },
+];
+
+/** "Every 6 months", "Every week", "Every 3 years". */
+export function repeatLabel(every: number, unit: RepeatUnit): string {
+  return every === 1 ? `Every ${unit}` : `Every ${every} ${unit}s`;
+}
