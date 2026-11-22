@@ -24,8 +24,9 @@
   // Cloudflare Access settings. Both are public identifiers, not secrets.
   // Left empty, the API refuses every request outside local dev (fails closed).
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": ""
+    "ACCESS_TEAM_DOMAIN": "ancient-breeze-dbcb.cloudflareaccess.com",
+    "ACCESS_AUD": "be9053a008a3f25c50668caf512f7848d6d359178ad27b05873396d39fce2818"
   }
-  // ALLOWED_EMAILS is set as a secret: `npx wrangler secret put ALLOWED_EMAILS`
+  // Who may sign in is decided entirely by the Access policy in Cloudflare.
+  // (The optional ALLOWED_EMAILS secret is deliberately not set.)
 }
