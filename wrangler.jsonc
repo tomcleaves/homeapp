@@ -16,9 +16,7 @@
     {
       "binding": "DB",
       "database_name": "homeapp",
-      // Replace with the id printed by `npx wrangler d1 create homeapp`.
-      // Local dev works without changing it.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "c6880ddb-ba90-4eb8-8941-4820dd8d96a1",
       "migrations_dir": "migrations"
     }
   ],
