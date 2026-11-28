@@ -28,10 +28,17 @@ There is no linter configured. Local dev requires `cp .dev.vars.example .dev.var
 
 ## Architecture
 
-**One Worker serves everything.** `wrangler.jsonc` sets `assets.run_worker_first: ["/api/*"]`, so only `/api/*` reaches the Hono app in `worker/index.ts`; every other path is the built React app from Workers static assets, with SPA fallback to `index.html`. The `@cloudflare/vite-plugin` runs both in one `vite` dev server.
+**One Worker serves everything.** `wrangler.jsonc` sets `assets.run_worker_first: ["/api/*", "/mcp"]`, so only those reach the Hono app in `worker/index.ts`; every other path is the built React app from Workers static assets, with SPA fallback to `index.html`. The `@cloudflare/vite-plugin` runs both in one `vite` dev server.
+
+**MCP server** (`worker/mcp/`, mounted at `/mcp` in `worker/index.ts`, also in `run_worker_first`): stateless Streamable HTTP via `createMcpHandler` from `@modelcontextprotocol/server` (v2), a fresh `McpServer` per request. It exposes recipe and house-job tools only (`homeapp_*`), no meals yet.
+- `/mcp` goes through the same `requireUser` as `/api` (plus an Origin check). In production a second, path-scoped Access app with **managed OAuth** signs agents in and forwards the normal Access JWT, which is why `ACCESS_AUD` is a comma-separated list (main app + `/mcp` app).
+- Tools never touch the DB directly: `worker/mcp/api.ts` calls the `/api` routes in-process (`api.fetch`), forwarding the caller's JWT/cookie, so all validation and business rules apply. Add a route first, then a tool on top of it.
+- Tool arguments use pounds (`estimate_gbp`), converted to pence at the edge (`toPence` in `worker/mcp/format.ts`). `today` for recurring jobs comes from `londonToday()` in `shared/week.ts`, since there's no browser.
+- Helpers used by both the UI and the tools live in `shared/` (`search.ts`, `jobs.ts`). `src/lib/jobs.ts` re-exports the job ones.
+- Tests in `test/mcp.test.ts` POST JSON-RPC to `/mcp` as the dev user; the 2026-07-28 revision also needs `mcp-method` and envelope `_meta` keys.
 
 **Auth is Cloudflare Access, verified again in the Worker** (`worker/auth.ts`, `requireUser` middleware on all `/api/*`):
-- In production, Access fronts the hostname and adds a JWT (`Cf-Access-Jwt-Assertion` header or `CF_Authorization` cookie). The Worker verifies signature, issuer (`https://<ACCESS_TEAM_DOMAIN>`) and audience (`ACCESS_AUD`) with `jose`.
+- In production, Access fronts the hostname and adds a JWT (`Cf-Access-Jwt-Assertion` header or `CF_Authorization` cookie). The Worker verifies signature, issuer (`https://<ACCESS_TEAM_DOMAIN>`) and audience (any AUD in the comma-separated `ACCESS_AUD`) with `jose`.
 - If `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` are empty, the API returns 503 for every request (fail closed). They are empty in the committed `wrangler.jsonc` until Access is set up.
 - `DEV_AUTH_EMAIL` (from `.dev.vars`) bypasses Access **only when the request hostname is localhost**. Keep that hostname check.
 - Optional `ALLOWED_EMAILS` secret (comma-separated) is a second allow-list.
@@ -60,7 +67,7 @@ There is no linter configured. Local dev requires `cp .dev.vars.example .dev.var
 
 **Pages**: three, listed in `PAGES` in `src/App.tsx`, which matches the path to a page component: the week plan (`/`, week in `?week=`), the recipe library (`/recipes`) and house jobs (`/jobs`). Routing is a tiny `pushState` router in `src/lib/router.ts` (`usePathname`, `navigate`, `linkProps`); add a real router only if pages multiply. On the jobs page, filtering and sorting are client-side (`src/lib/jobs.ts`).
 - `dueState` puts each open job in one place: overdue or due within 7 days → the to-do list; further off → a collapsed "Coming up" section; no due date → the to-do list.
-- A Jobs / Shopping list switch shows every unbought part across open jobs, grouped by job. Jobs ticked off during a visit stay in the to-do list, struck through, until you leave the page (`justDone` in `src/pages/jobs-page.tsx`), so the "what did it cost?" prompt stays visible. Library search is client-side (`src/lib/search.ts`, accent-insensitive, every word must match), since the whole library is fetched at once.
+- A Jobs / Shopping list switch shows every unbought part across open jobs, grouped by job. Jobs ticked off during a visit stay in the to-do list, struck through, until you leave the page (`justDone` in `src/pages/jobs-page.tsx`), so the "what did it cost?" prompt stays visible. Library search is client-side (`shared/search.ts`, accent-insensitive, every word must match), since the whole library is fetched at once.
 
 **Client state** (`src/lib/queries.ts`, TanStack Query):
 - Each week is cached under `["week", monday]`; the library under `["recipes"]`. Meal mutations patch the week cache from the server response and invalidate the library. Library mutations invalidate both, since weeks show recipe names.

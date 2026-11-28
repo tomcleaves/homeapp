@@ -10,7 +10,7 @@ import { LoadError, Notice } from "@/components/notice";
 import { RecipeCard } from "@/components/recipe-card";
 import { useCreateRecipe, useRecipes } from "@/lib/queries";
 import { linkProps } from "@/lib/router";
-import { fold, matchesSearch } from "@/lib/search";
+import { fold, matchesSearch } from "@shared/search";
 
 type Sort = "recent" | "most" | "name";
 

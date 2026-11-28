@@ -27,7 +27,7 @@ import {
   type JobSort,
 } from "@/lib/jobs";
 import { useCreateJob, useJobs } from "@/lib/queries";
-import { fold } from "@/lib/search";
+import { fold } from "@shared/search";
 import { cn } from "@/lib/utils";
 
 const labelClass = "text-xs font-medium text-muted-foreground";

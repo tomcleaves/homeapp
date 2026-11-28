@@ -86,3 +86,9 @@ export const REPEAT_PRESETS: { every: number; unit: RepeatUnit; label: string }[
 export function repeatLabel(every: number, unit: RepeatUnit): string {
   return every === 1 ? `Every ${unit}` : `Every ${every} ${unit}s`;
 }
+
+/** Today's date in the UK, for code with no browser (the Worker's MCP tools). */
+export function londonToday(now: Date = new Date()): string {
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(now);
+}

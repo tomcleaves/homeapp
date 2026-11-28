@@ -5,7 +5,7 @@ import { recipeHost } from "@shared/recipes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRecipes } from "@/lib/queries";
-import { matchesSearch } from "@/lib/search";
+import { matchesSearch } from "@shared/search";
 
 type RecipeChange = Pick<MealUpdate, "recipeUrl" | "recipeId">;
 

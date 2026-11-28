@@ -88,6 +88,48 @@ page before they reach the app. Signed-in requests carry a signed JWT
 issuer and AUD. So the API stays protected even if a route is ever left uncovered by Access.
 "Sign out" goes to `/cdn-cgi/access/logout`.
 
+## Connect Claude (MCP)
+
+The Worker also serves an [MCP](https://modelcontextprotocol.io) server at `/mcp`, so Claude (or another
+agent) can manage the **recipe library** and **house jobs**: list and search recipes, add, rename or delete
+them; list, add, update and tick off jobs; manage parts; and read the shopping list. Meal planning isn't
+exposed yet.
+
+Sign-in is Cloudflare Access again, using **managed OAuth**: Claude gets a `401` pointing at Access,
+opens the same one-time-PIN login in your browser, and from then on Access forwards the usual JWT to the
+Worker. Edits are recorded as your email. There's no extra login code and no extra storage.
+
+### One-time setup
+
+1. **Add a second Access application for the `/mcp` path.** Zero Trust → Access controls → Applications →
+   Create new application → Self-hosted. Use the same hostname as the app (for example
+   `homeapp.<your-subdomain>.workers.dev`) with path `mcp`, and the same **Allow** policy (your two emails).
+   It's a separate app so that managed OAuth doesn't change how the web app's own sign-in behaves.
+   - If the main app is protected at the *Worker* level (Workers & Pages → homeapp → Access tab) rather
+     than by a hostname app, make sure the `/mcp` app is the one that applies to `/mcp` (Access picks
+     the most specific path). If it isn't, switch the main app to a hostname app.
+2. **Turn on managed OAuth** in that app: Advanced settings → **Managed OAuth** on, then:
+   - Dynamic client registration on, with allowed redirect URI `https://claude.ai/api/mcp/auth_callback`.
+   - Tick *Allow localhost clients* and *Allow loopback clients* too if you'll use Claude Code or
+     the MCP Inspector.
+   - Access token lifetime 15 minutes and grant session duration 2–4 weeks. Claude refreshes
+     quietly, and you sign in again about once a month.
+3. **Tell the Worker about the new app.** Copy the `/mcp` app's **AUD tag** and add it to
+   `ACCESS_AUD` in `wrangler.jsonc`, comma-separated after the existing one, then `pnpm run deploy`.
+4. **Add the connector in Claude.** Settings → Connectors → Add custom connector →
+   URL `https://<your-host>/mcp`. Claude opens the Access login; enter the emailed code.
+   Claude Code: `claude mcp add --transport http homeapp https://<your-host>/mcp`.
+
+If Claude can't complete the login, check: the redirect URI above is allowed; `/.well-known/…` requests
+aren't being redirected by the main app (add `/.well-known/oauth-protected-resource*` as a second path on the
+`/mcp` app if they are); and `ACCESS_AUD` includes the `/mcp` app's tag (otherwise the Worker answers 401).
+A Cloudflare **MCP server portal** in front of `/mcp` is the fallback; it needs a custom domain.
+
+### Trying it locally
+
+With `pnpm dev` running, `npx @modelcontextprotocol/inspector` and connect to `http://localhost:5173/mcp`
+(Streamable HTTP). Locally you're `DEV_AUTH_EMAIL`, as with the API.
+
 ## Free-tier headroom
 
 Workers free plan: 100k requests a day. D1 free: 5M row reads and 100k writes a day.

@@ -5,11 +5,11 @@
   "compatibility_date": "2026-10-20",
   "observability": { "enabled": true },
 
-  // The React app is served as static assets. Anything under /api/* goes to the
+  // The React app is served as static assets. /api/* and /mcp (the MCP server) go to the
   // Worker first; every other unknown path falls back to index.html (SPA routing).
   "assets": {
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/mcp"]
   },
 
   "d1_databases": [
@@ -22,6 +22,7 @@
   ],
 
   // Cloudflare Access settings. Both are public identifiers, not secrets.
+  // ACCESS_AUD is comma-separated: the app's AUD tag, then the /mcp app's.
   // Left empty, the API refuses every request outside local dev (fails closed).
   "vars": {
     "ACCESS_TEAM_DOMAIN": "ancient-breeze-dbcb.cloudflareaccess.com",

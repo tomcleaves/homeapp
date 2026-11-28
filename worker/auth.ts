@@ -66,8 +66,12 @@ export async function resolveEmail(
   }
 
   const teamDomain = normaliseTeamDomain(env.ACCESS_TEAM_DOMAIN ?? "");
-  const audience = (env.ACCESS_AUD ?? "").trim();
-  if (!teamDomain || !audience) {
+  // One AUD tag per Access application: the app itself, plus the /mcp app.
+  const audience = (env.ACCESS_AUD ?? "")
+    .split(",")
+    .map((a) => a.trim())
+    .filter(Boolean);
+  if (!teamDomain || !audience.length) {
     // Fail closed: never serve data if Access isn't configured.
     throw new HTTPException(503, { message: "Cloudflare Access is not configured" });
   }

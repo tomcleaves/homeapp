@@ -44,6 +44,16 @@ describe("Cloudflare Access verification", () => {
     );
   });
 
+  it("accepts a token for any listed application (the app and its /mcp app)", async () => {
+    const twoApps = { ...accessEnv, ACCESS_AUD: ` ${AUD} , mcp-audience-tag ` } as Bindings;
+    for (const aud of [AUD, "mcp-audience-tag"]) {
+      const token = await sign({ email: "sophia@example.com" }, { aud });
+      expect(await resolveEmail(requestWith(token), twoApps, () => keys)).toBe("sophia@example.com");
+    }
+    const other = await sign({ email: "sophia@example.com" }, { aud: "someone-elses-app" });
+    expect(await resolveEmail(requestWith(other), twoApps, () => keys)).toBeNull();
+  });
+
   it("rejects a token for another application", async () => {
     const token = await sign({ email: "a@example.com" }, { aud: "someone-elses-app" });
     expect(await resolveEmail(requestWith(token), accessEnv, () => keys)).toBeNull();
